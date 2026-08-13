@@ -69,8 +69,6 @@ KSampler 3 ─► VAEDecode ─┤
 
 在 ComfyUI 中打开 `ComfyUI-FishCustom-Nodes/example_workflow.json` 即可加载，按需替换 checkpoint 和词条内容。
 
-The repo ships `example_workflow.json` (based on a basic text-to-image workflow) showing the full tag pipeline plus batch folder saving. Open it in ComfyUI and swap in your own checkpoint and tags.
-
 ---
 
 ## 许可证
