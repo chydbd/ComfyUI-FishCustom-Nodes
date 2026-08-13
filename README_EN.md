@@ -61,6 +61,14 @@ KSampler 3 ─► VAEDecode ─┤
 
 All images from one queue run land in a single timestamped folder like `output/batch_20260812_153012/`, so every batch is easy to archive and compare. Supports `png` (with full metadata) and `jpg` (RGBA auto-composited onto white); save location selectable: `output` / `temp` / `custom` (absolute path or relative to ComfyUI root).
 
+### Example workflow
+
+The repo ships `example_workflow.json` (based on a basic text-to-image workflow) showing the full tag pipeline plus batch folder saving:
+- Tag pipeline: StaticTag (base) → RandomTag (random expressions) → Concat → TagMutualExclusion (conflict filter) → TagBlacklist (cleanup) → CLIPTextEncode
+- Saved via SaveBatchFolder into per-batch folders
+
+Open `ComfyUI-FishCustom-Nodes/example_workflow.json` in ComfyUI, then swap in your own checkpoint and tags.
+
 ---
 
 ## License

@@ -61,6 +61,16 @@ KSampler 3 ─► VAEDecode ─┤
 
 一次队列运行的所有图片会保存到同一时间戳文件夹（如 `output/batch_20260812_153012/`），按批归档、对比都方便。支持 PNG（含完整元数据）与 JPG（RGBA 自动白底合成）；保存位置可选 `output` / `temp` / 自定义（绝对路径或相对 ComfyUI 根目录的相对路径）。
 
+### 示例工作流
+
+仓库自带 `example_workflow.json`（基于 ComfyUI 基础文生图工作流改造）：
+- 词条管线：StaticTag（基础词条）→ RandomTag（随机表情）→ Concat → TagMutualExclusion（互斥过滤）→ TagBlacklist（黑名单）→ CLIPTextEncode
+- 使用 SaveBatchFolder 按批保存到独立文件夹
+
+在 ComfyUI 中打开 `ComfyUI-FishCustom-Nodes/example_workflow.json` 即可加载，按需替换 checkpoint 和词条内容。
+
+The repo ships `example_workflow.json` (based on a basic text-to-image workflow) showing the full tag pipeline plus batch folder saving. Open it in ComfyUI and swap in your own checkpoint and tags.
+
 ---
 
 ## 许可证
