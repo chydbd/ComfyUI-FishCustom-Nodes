@@ -2,7 +2,7 @@
 
 [English](README_EN.md) | **中文**
 
-ComfyUI 自定义节点：词条生成/过滤、逻辑路由、批量分文件夹保存。
+ComfyUI 自定义节点：词条生成/过滤、逻辑路由、批量分文件夹保存、批量采样。
 
 ---
 
@@ -16,7 +16,8 @@ ComfyUI 自定义节点：词条生成/过滤、逻辑路由、批量分文件�
 | **Tag Mutual Exclusion** | `FishCustom/tag` | 互斥词条过滤，每组最多保留一个（random / first / last）。 |
 | **Text Analyzer** | `FishCustom/logic` | 关键词检测，输出选择器信号（INT）。 |
 | **Smart Switch** | `FishCustom/logic` | 按选择器路由 10 路输入（懒求值，只计算激活分支）。 |
-| **Concat** | `FishCustom/utils` | 合并最多 10 路文本输入，可自定义分隔符。 |
+| **Concat** | `FishCustom/utils` | 合并最多 10 路文本输入，可自定义分隔符；`newline=True` 时用换行连接，适合拼多行 recipe。 |
+| **Batch Sampler** | `FishCustom/sample` | 一个节点替代 N 条并列采样链：多行 recipe 逐行采样，支持逐图 seed / denoise / latent 来源，输出合并后的图片 batch。 |
 | **Save Batch Folder** | `FishCustom/save` | 最多 8 路图片，每次执行保存到独立时间戳文件夹。支持 PNG/JPG、输出目录可选 output/temp/自定义。 |
 
 ---
@@ -61,13 +62,21 @@ KSampler 3 ─► VAEDecode ─┤
 
 一次队列运行的所有图片会保存到同一时间戳文件夹（如 `output/batch_20260812_153012/`），按批归档、对比都方便。支持 PNG（含完整元数据）与 JPG（RGBA 自动白底合成）；保存位置可选 `output` / `temp` / 自定义（绝对路径或相对 ComfyUI 根目录的相对路径）。
 
-### 示例工作流
+### 多图批量采样（Batch Sampler）
 
-仓库自带 `example_workflow.json`（基于 ComfyUI 基础文生图工作流改造）：
-- 词条管线：StaticTag（基础词条）→ RandomTag（随机表情）→ Concat → TagMutualExclusion（互斥过滤）→ TagBlacklist（黑名单）→ CLIPTextEncode
-- 使用 SaveBatchFolder 按批保存到独立文件夹
+一个 **Batch Sampler** 替代 N 条并列的 KSampler / VAEDecode 链路。`recipe` 每行一张图；各图的词条照常用 StaticTag / RandomTag / TagBlacklist 拼好，最后用 **Concat（`newline=True`）** 汇成 recipe：
 
-在 ComfyUI 中打开 `ComfyUI-FishCustom-Nodes/example_workflow.json` 即可加载，按需替换 checkpoint 和词条内容。
+```
+StaticTag/Blacklist... → 第 1 图 prompt ─┐
+StaticTag/RandomTag... → 第 2 图 prompt ─┼─► Concat(newline=True) ─► Batch Sampler(recipe) ─► Save Batch Folder
+...                                      ┘
+```
+
+- `seed` / `denoise` / `latent_src` 为逗号列表，逐图取值，不足时最后一个值广播（`-1` = 随机 seed）。
+- `latent_src` 逐图指定 latent 来源：`blank`（空白 latent）、`input`（外部 `latent` 端口）、`prev`（上一张输出）、`step:k`（第 k 张输出；可反向引用实现 B→A 图生图，节点内部按依赖排序执行，成环会报错）。
+- 行内随机项：`{a|b|c}` 每次出现独立随机；`{name:a|b|c}` 整批只抽一次、共享结果。
+- 可选 `template` 输入：模板中用 `{line}` 占位，recipe 每行只写变化部分。
+- 输出为合并后的 IMAGE batch（`count` 为图片数，调试用），直接接 Save Batch Folder 即可全部保存。
 
 ---
 

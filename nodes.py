@@ -5,10 +5,19 @@ import re
 import time
 
 import numpy as np
+import torch
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
 import folder_paths
+import comfy.samplers
+
+try:
+    from nodes import KSampler as _CoreKSampler
+    from nodes import VAEDecode as _CoreVAEDecode
+    from nodes import CLIPTextEncode as _CoreCLIPTextEncode
+except ImportError:  # pragma: no cover
+    _CoreKSampler = _CoreVAEDecode = _CoreCLIPTextEncode = None
 
 try:
     from comfy.cli_args import args
@@ -336,7 +345,11 @@ class Concat:
             "required": {
                 "separator": ("STRING", {
                     "default": ",",
-                    "tooltip": "Separator between strings (e.g. ',' or ' ')"
+                    "tooltip": "Separator between strings (e.g. ',' or ' '). Ignored when newline=True."
+                }),
+                "newline": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "When enabled, inputs are joined with a newline character instead of separator. Useful for building multi-line recipe text for FishBatchSampler."
                 }),
             },
             "optional": {},
@@ -350,13 +363,14 @@ class Concat:
     FUNCTION = "concat"
     CATEGORY = "FishCustom/utils"
 
-    def concat(self, separator=",", **kwargs):
+    def concat(self, separator=",", newline=False, **kwargs):
         parts = []
         for key in sorted(kwargs.keys()):
             val = kwargs[key]
             if val is not None and val.strip():
                 parts.append(val.strip())
-        result = separator.join(parts)
+        sep = "\n" if newline else separator
+        result = sep.join(parts)
         return (result,)
 
 
@@ -677,6 +691,272 @@ class SaveBatchFolder:
         return {"ui": {"images": results}}
 
 
+_BATCH_RANDOM_ITEM_RE = re.compile(r"\{([^{}]+)\}")
+
+
+class FishBatchSampler:
+    """One node replaces N parallel sampling chains.
+
+    recipe: one prompt per line (blank lines and # comments are skipped).
+    Optional `template` input: every {line} in template is replaced by the
+    recipe line to build that image's full prompt.
+
+    seed / denoise / latent_src are comma lists applied per image (the last
+    value repeats when the list is shorter than the recipe):
+      seed       = "123, 456, -1, -1"      (-1 = random)
+      denoise    = "1, 0.98, 0.98"
+      latent_src = "blank, prev, step:1"
+
+    latent_src values:
+      blank  -> new empty latent from width/height
+      input  -> the optional `latent` input (img2img start)
+      prev   -> output latent of the previous recipe line (line 1 falls back
+                to `latent` input, then blank)
+      step:k -> output latent of the k-th recipe line (1-based). Forward and
+                backward references are allowed; steps are executed in
+                dependency order. Cycles raise an error.
+
+    Random item syntax inside a prompt:
+      {a|b|c}        -> one choice, drawn every time it appears
+      {name:a|b|c}   -> named random, drawn once per batch and reused
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "vae": ("VAE",),
+                "negative": ("CONDITIONING",),
+                "recipe": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "One prompt per line. Blank lines and # comments are skipped.\n"
+                               "Random item syntax: {a|b|c} random per use; {name:a|b|c} named random, drawn once per batch."
+                }),
+                "width": ("INT", {"default": 896, "min": 64, "max": 8192, "step": 64}),
+                "height": ("INT", {"default": 1152, "min": 64, "max": 8192, "step": 64}),
+                "steps": ("INT", {"default": 30, "min": 1, "max": 10000}),
+                "cfg": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 100.0, "step": 0.1}),
+                "sampler_name": (comfy.samplers.KSampler.SAMPLERS, {"default": "euler"}),
+                "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {"default": "exponential"}),
+                "seed": ("STRING", {
+                    "default": "-1",
+                    "tooltip": "Comma list, one per image. -1 = random. Last value repeats."
+                }),
+                "denoise": ("STRING", {
+                    "default": "1.0",
+                    "tooltip": "Comma list, one per image. Last value repeats."
+                }),
+                "latent_src": ("STRING", {
+                    "default": "blank",
+                    "tooltip": "Comma list, one per image: blank | input | prev | step:k (1-based). Last value repeats."
+                }),
+            },
+            "optional": {
+                "template": ("STRING", {
+                    "forceInput": True,
+                    "tooltip": "Optional. If connected, {line} in template is replaced by each recipe line."
+                }),
+                "latent": ("LATENT",),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "INT")
+    RETURN_NAMES = ("images", "count")
+    FUNCTION = "batch_sample"
+    CATEGORY = "FishCustom/sample"
+    DESCRIPTION = "Runs one sampler per recipe line with per-image seed/denoise/latent source and returns all images as one batch."
+
+    # ------------------------------------------------------------------ #
+    # recipe
+    # ------------------------------------------------------------------ #
+    def _recipe_lines(self, recipe, template):
+        lines = [ln.strip() for ln in recipe.splitlines()
+                 if ln.strip() and not ln.strip().startswith("#")]
+        if not lines:
+            raise ValueError("FishBatchSampler: recipe 为空（或只有空行/注释）")
+        if template:
+            lines = [template.replace("{line}", ln) for ln in lines]
+        return lines
+
+    # ------------------------------------------------------------------ #
+    # random items
+    # ------------------------------------------------------------------ #
+    def _resolve_random_items(self, text, rng, named_cache):
+        def repl(m):
+            inner = m.group(1).strip()
+            if "|" not in inner:
+                return m.group(0)  # not a random item, keep as-is
+            if ":" in inner:
+                name_part, choices_part = inner.split(":", 1)
+                name_part = name_part.strip()
+                choices_part = choices_part.strip()
+                if name_part and choices_part:
+                    if name_part not in named_cache:
+                        choices = [c.strip() for c in choices_part.split("|") if c.strip()]
+                        if choices:
+                            named_cache[name_part] = rng.choice(choices)
+                    return named_cache.get(name_part, m.group(0))
+            choices = [c.strip() for c in inner.split("|") if c.strip()]
+            if not choices:
+                return m.group(0)
+            return rng.choice(choices)
+        return _BATCH_RANDOM_ITEM_RE.sub(repl, text)
+
+    # ------------------------------------------------------------------ #
+    # list parsers
+    # ------------------------------------------------------------------ #
+    def _parse_int_list(self, text, count):
+        parts = [p.strip() for p in text.split(",") if p.strip()]
+        if not parts:
+            return [-1] * count
+        out = []
+        for p in parts:
+            try:
+                out.append(int(p))
+            except ValueError:
+                out.append(-1)
+        while len(out) < count:
+            out.append(out[-1])
+        return out[:count]
+
+    def _parse_float_list(self, text, count, default):
+        parts = [p.strip() for p in text.split(",") if p.strip()]
+        if not parts:
+            return [default] * count
+        out = []
+        for p in parts:
+            try:
+                out.append(float(p))
+            except ValueError:
+                out.append(default)
+        while len(out) < count:
+            out.append(out[-1])
+        return out[:count]
+
+    def _parse_src_list(self, text, count):
+        parts = [p.strip().lower() for p in text.split(",") if p.strip()]
+        if not parts:
+            return ["blank"] * count
+        for p in parts:
+            if p not in ("blank", "input", "prev") and not p.startswith("step:"):
+                raise ValueError(
+                    f"FishBatchSampler: 未知 latent_src '{p}'，可用 blank / input / prev / step:k")
+        while len(parts) < count:
+            parts.append(parts[-1])
+        return parts[:count]
+
+    # ------------------------------------------------------------------ #
+    # dependency order
+    # ------------------------------------------------------------------ #
+    def _exec_order(self, sources):
+        n = len(sources)
+        deps = {}
+        for i, s in enumerate(sources):
+            if s == "prev":
+                deps[i] = [i - 1] if i > 0 else []
+            elif s.startswith("step:"):
+                try:
+                    k = int(s.split(":", 1)[1])
+                except ValueError:
+                    raise ValueError(f"FishBatchSampler: step:k 的 k 必须是整数: '{s}'")
+                k -= 1
+                if k < 0 or k >= n:
+                    raise ValueError(f"FishBatchSampler: step:k 越界: '{s}'（共 {n} 步）")
+                if k == i:
+                    raise ValueError(f"FishBatchSampler: step:k 不能引用自身: '{s}'")
+                deps[i] = [k]
+            else:
+                deps[i] = []
+
+        indeg = {i: 0 for i in range(n)}
+        graph = {i: [] for i in range(n)}
+        for i in range(n):
+            for d in deps[i]:
+                indeg[i] += 1
+                graph[d].append(i)
+
+        queue = [i for i in range(n) if indeg[i] == 0]
+        order = []
+        while queue:
+            cur = queue.pop(0)
+            order.append(cur)
+            for nxt in graph[cur]:
+                indeg[nxt] -= 1
+                if indeg[nxt] == 0:
+                    queue.append(nxt)
+
+        if len(order) != n:
+            raise ValueError("FishBatchSampler: latent_src 存在循环依赖，请检查 step:k 引用")
+        return order
+
+    # ------------------------------------------------------------------ #
+    # main
+    # ------------------------------------------------------------------ #
+    def batch_sample(self, model, clip, vae, negative, recipe, width, height, steps, cfg,
+                     sampler_name, scheduler, seed, denoise, latent_src,
+                     template=None, latent=None):
+        if _CoreKSampler is None or _CoreVAEDecode is None or _CoreCLIPTextEncode is None:
+            raise RuntimeError("FishBatchSampler: 无法导入 ComfyUI 核心节点 KSampler/VAEDecode/CLIPTextEncode")
+
+        prompts = self._recipe_lines(recipe, template)
+        n = len(prompts)
+
+        seeds = self._parse_int_list(seed, n)
+        denoises = self._parse_float_list(denoise, n, 1.0)
+        srcs = self._parse_src_list(latent_src, n)
+
+        order = self._exec_order(srcs)
+
+        def make_blank():
+            return {"samples": torch.zeros([1, 4, height // 8, width // 8])}
+
+        latents = {}
+        images = []
+        named_cache = {}
+
+        for i in order:
+            seed_i = seeds[i] if seeds[i] >= 0 else random.randint(0, 0xffffffffffffffff)
+            rng = random.Random(seed_i)
+            prompt = self._resolve_random_items(prompts[i], rng, named_cache)
+
+            positive = _CoreCLIPTextEncode().encode(clip, prompt)[0]
+
+            src = srcs[i]
+            if src == "blank":
+                lat = make_blank()
+            elif src == "input":
+                if latent is None:
+                    raise ValueError("FishBatchSampler: latent_src 含 input，但未连接 latent 输入")
+                lat = latent
+            elif src == "prev":
+                if i > 0:
+                    lat = latents[i - 1]
+                elif latent is not None:
+                    lat = latent
+                else:
+                    lat = make_blank()
+            else:  # step:k
+                k = int(src.split(":", 1)[1]) - 1
+                lat = latents[k]
+
+            if denoises[i] > 0:
+                sampled = _CoreKSampler().sample(model, seed_i, steps, cfg, sampler_name,
+                                                 scheduler, positive, negative, lat,
+                                                 denoise=denoises[i])[0]
+            else:
+                sampled = lat
+            latents[i] = sampled
+
+            img = _CoreVAEDecode().decode(vae, sampled)[0]
+            images.append(img.cpu())
+
+        batch = torch.cat(images, dim=0)
+        return (batch, n)
+
+
 NODE_CLASS_MAPPINGS = {
     "StaticTag (ponytail)": StaticTag,
     "RandomTag (ponytail)": RandomTag,
@@ -686,6 +966,7 @@ NODE_CLASS_MAPPINGS = {
     "TagBlacklist (ponytail)": TagBlacklist,
     "TagMutualExclusion (ponytail)": TagMutualExclusion,
     "SaveBatchFolder (ponytail)": SaveBatchFolder,
+    "FishBatchSampler (ponytail)": FishBatchSampler,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -697,4 +978,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "TagBlacklist (ponytail)": "Tag Blacklist 🐟",
     "TagMutualExclusion (ponytail)": "Tag Mutual Exclusion 🐟",
     "SaveBatchFolder (ponytail)": "Save Batch Folder 🐟",
+    "FishBatchSampler (ponytail)": "Batch Sampler 🐟",
 }

@@ -4,3 +4,8 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# local demo / example workflows (not part of the published repo)
+example_workflow.json
+workflows/
+make_demo_workflows.py

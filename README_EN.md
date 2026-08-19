@@ -2,7 +2,7 @@
 
 **English** | [中文](README.md)
 
-Custom nodes for ComfyUI: tag generation/filtering, logic routing, and batch folder saving.
+Custom nodes for ComfyUI: tag generation/filtering, logic routing, batch folder saving, and batch sampling.
 
 ---
 
@@ -16,7 +16,8 @@ Custom nodes for ComfyUI: tag generation/filtering, logic routing, and batch fol
 | **Tag Mutual Exclusion** | `FishCustom/tag` | Keeps at most one tag per exclusive group (random / first / last). |
 | **Text Analyzer** | `FishCustom/logic` | Detects keywords and outputs an INT selector signal. |
 | **Smart Switch** | `FishCustom/logic` | Routes one of 10 inputs to output based on selector (lazy evaluation). |
-| **Concat** | `FishCustom/utils` | Joins up to 10 STRING inputs with a configurable separator. |
+| **Concat** | `FishCustom/utils` | Joins up to 10 STRING inputs with a configurable separator; `newline=True` joins with newlines, handy for building multi-line recipes. |
+| **Batch Sampler** | `FishCustom/sample` | Replaces N parallel sampling chains: samples one image per recipe line with per-image seed / denoise / latent source, returns all images as one batch. |
 | **Save Batch Folder** | `FishCustom/save` | Saves up to 8 image inputs into one unique timestamped folder per execution. PNG / JPG, save to output / temp / custom dir. |
 
 ---
@@ -61,13 +62,21 @@ KSampler 3 ─► VAEDecode ─┤
 
 All images from one queue run land in a single timestamped folder like `output/batch_20260812_153012/`, so every batch is easy to archive and compare. Supports `png` (with full metadata) and `jpg` (RGBA auto-composited onto white); save location selectable: `output` / `temp` / `custom` (absolute path or relative to ComfyUI root).
 
-### Example workflow
+### Multi-image batch sampling (Batch Sampler)
 
-The repo ships `example_workflow.json` (based on a basic text-to-image workflow) showing the full tag pipeline plus batch folder saving:
-- Tag pipeline: StaticTag (base) → RandomTag (random expressions) → Concat → TagMutualExclusion (conflict filter) → TagBlacklist (cleanup) → CLIPTextEncode
-- Saved via SaveBatchFolder into per-batch folders
+A single **Batch Sampler** replaces N parallel KSampler / VAEDecode chains. The `recipe` holds one prompt per line; build each image's tags as usual with StaticTag / RandomTag / TagBlacklist, then join them into the recipe with **Concat (`newline=True`)**:
 
-Open `ComfyUI-FishCustom-Nodes/example_workflow.json` in ComfyUI, then swap in your own checkpoint and tags.
+```
+StaticTag/Blacklist... → prompt 1 ─┐
+StaticTag/RandomTag... → prompt 2 ─┼─► Concat(newline=True) ─► Batch Sampler(recipe) ─► Save Batch Folder
+...                                ┘
+```
+
+- `seed` / `denoise` / `latent_src` are comma lists applied per image; the last value repeats when the list is shorter (`-1` = random seed).
+- `latent_src` selects the latent source per image: `blank` (empty latent), `input` (the external `latent` port), `prev` (previous image's output), `step:k` (the k-th image's output; backward references such as B→A are supported — steps run in dependency order, cycles raise an error).
+- Inline random items: `{a|b|c}` is drawn each time it appears; `{name:a|b|c}` is drawn once per batch and shared.
+- Optional `template` input: use `{line}` as a placeholder and write only the varying part on each recipe line.
+- Output is a merged IMAGE batch (`count` is the image count, for debugging); connect it directly to Save Batch Folder to save everything.
 
 ---
 
