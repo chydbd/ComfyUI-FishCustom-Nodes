@@ -1,0 +1,16 @@
+[project]
+name = "comfyui-fishcustom-nodes"
+version = "0.2.0"
+description = "ComfyUI nodes for tag recipes: weighted tag picking, blacklists, recipe building (tag chain / style permute / recipe map), batch sampling and batch folder saving."
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/chydbd/ComfyUI-FishCustom-Nodes"
+
+[tool.comfy]
+PublisherId = "chydbd"
+DisplayName = "ComfyUI-FishCustom-Nodes"
+Icon = ""

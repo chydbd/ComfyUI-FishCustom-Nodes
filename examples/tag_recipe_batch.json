@@ -1,0 +1,929 @@
+{
+  "id": "caf9f6a1-9aa3-462b-af92-25a3a4a3668b",
+  "revision": 0,
+  "last_node_id": 10,
+  "last_link_id": 10,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "pos": [
+        30,
+        40
+      ],
+      "size": [
+        320,
+        100
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "ckpt_name",
+          "name": "ckpt_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "ckpt_name"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            4
+          ]
+        },
+        {
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            5
+          ]
+        },
+        {
+          "localized_name": "VAE",
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 2,
+          "links": [
+            6
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CheckpointLoaderSimple"
+      },
+      "widgets_values": [
+        "anything-v5-PrtRE.safetensors"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "StaticTag (ponytail)",
+      "pos": [
+        30,
+        200
+      ],
+      "size": [
+        340,
+        130
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "StaticTag (ponytail)"
+      },
+      "widgets_values": [
+        "masterpiece, best quality, 1girl, solo, white background, looking at viewer"
+      ],
+      "title": "Base prompt"
+    },
+    {
+      "id": 3,
+      "type": "FishTagChain (ponytail)",
+      "pos": [
+        30,
+        380
+      ],
+      "size": [
+        400,
+        300
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "r0",
+          "name": "r0",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "r1",
+          "name": "r1",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "r2",
+          "name": "r2",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "r3",
+          "name": "r3",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "r4",
+          "name": "r4",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "r5",
+          "name": "r5",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "r6",
+          "name": "r6",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "r7",
+          "name": "r7",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "base",
+          "name": "base",
+          "type": "STRING",
+          "widget": {
+            "name": "base"
+          },
+          "link": 1
+        },
+        {
+          "localized_name": "steps",
+          "name": "steps",
+          "type": "STRING",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "recipe",
+          "name": "recipe",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            2
+          ]
+        },
+        {
+          "localized_name": "count",
+          "name": "count",
+          "type": "INT",
+          "slot_index": 1,
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FishTagChain (ponytail)"
+      },
+      "widgets_values": [
+        "masterpiece, best quality, 1girl, solo, white background, looking at viewer",
+        "smiling | looking at viewer\nblushing, happy\n2girls, yuri | 1girl, solo"
+      ],
+      "title": "Tag Chain (base + 3 steps = 4 images)"
+    },
+    {
+      "id": 4,
+      "type": "FishRecipeMap (ponytail)",
+      "pos": [
+        30,
+        720
+      ],
+      "size": [
+        400,
+        300
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "recipe",
+          "name": "recipe",
+          "type": "STRING",
+          "widget": {
+            "name": "recipe"
+          },
+          "link": 2
+        },
+        {
+          "localized_name": "extra",
+          "name": "extra",
+          "type": "STRING",
+          "widget": {
+            "name": "extra"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "mode",
+          "name": "mode",
+          "type": "COMBO",
+          "widget": {
+            "name": "mode"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "apply_mode",
+          "name": "apply_mode",
+          "type": "COMBO",
+          "widget": {
+            "name": "apply_mode"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "joiner",
+          "name": "joiner",
+          "type": "STRING",
+          "widget": {
+            "name": "joiner"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "recipe",
+          "name": "recipe",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            8
+          ]
+        },
+        {
+          "localized_name": "count",
+          "name": "count",
+          "type": "INT",
+          "slot_index": 1,
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FishRecipeMap (ponytail)"
+      },
+      "widgets_values": [
+        "",
+        "soft lighting, detailed background",
+        "append",
+        "each",
+        ", "
+      ],
+      "title": "Recipe Map (append to every line)"
+    },
+    {
+      "id": 5,
+      "type": "FishStylePermute (ponytail)",
+      "pos": [
+        30,
+        1060
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 2,
+      "inputs": [
+        {
+          "localized_name": "styles",
+          "name": "styles",
+          "type": "STRING",
+          "widget": {
+            "name": "styles"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "mode",
+          "name": "mode",
+          "type": "COMBO",
+          "widget": {
+            "name": "mode"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "joiner",
+          "name": "joiner",
+          "type": "STRING",
+          "widget": {
+            "name": "joiner"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "recipe",
+          "name": "recipe",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": []
+        },
+        {
+          "localized_name": "count",
+          "name": "count",
+          "type": "INT",
+          "slot_index": 1,
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FishStylePermute (ponytail)"
+      },
+      "widgets_values": [
+        "soft lighting\nrim lighting\nbacklight",
+        "combinations",
+        ", "
+      ],
+      "title": "Style Permute (muted - alternative recipe source)"
+    },
+    {
+      "id": 6,
+      "type": "StaticTag (ponytail)",
+      "pos": [
+        470,
+        40
+      ],
+      "size": [
+        340,
+        130
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "StaticTag (ponytail)"
+      },
+      "widgets_values": [
+        "text, watermark, lowres, worst quality, bad anatomy"
+      ],
+      "title": "Negative prompt"
+    },
+    {
+      "id": 7,
+      "type": "CLIPTextEncode",
+      "pos": [
+        470,
+        200
+      ],
+      "size": [
+        340,
+        110
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": null
+        },
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            7
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "title": "Negative encode"
+    },
+    {
+      "id": 8,
+      "type": "FishBatchSampler (ponytail)",
+      "pos": [
+        860,
+        40
+      ],
+      "size": [
+        380,
+        420
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 4
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 5
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "link": 6
+        },
+        {
+          "localized_name": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 7
+        },
+        {
+          "localized_name": "template",
+          "name": "template",
+          "type": "STRING",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "latent",
+          "name": "latent",
+          "type": "LATENT",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "recipe",
+          "name": "recipe",
+          "type": "STRING",
+          "widget": {
+            "name": "recipe"
+          },
+          "link": 8
+        },
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "steps",
+          "name": "steps",
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "widget": {
+            "name": "cfg"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "sampler_name",
+          "name": "sampler_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "sampler_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "scheduler",
+          "name": "scheduler",
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "STRING",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "denoise",
+          "name": "denoise",
+          "type": "STRING",
+          "widget": {
+            "name": "denoise"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "latent_src",
+          "name": "latent_src",
+          "type": "STRING",
+          "widget": {
+            "name": "latent_src"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            9
+          ]
+        },
+        {
+          "localized_name": "count",
+          "name": "count",
+          "type": "INT",
+          "slot_index": 1,
+          "links": []
+        },
+        {
+          "localized_name": "prompts",
+          "name": "prompts",
+          "type": "STRING",
+          "slot_index": 2,
+          "links": [
+            10
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "FishBatchSampler (ponytail)"
+      },
+      "widgets_values": [
+        "",
+        512,
+        768,
+        28,
+        5.0,
+        "euler",
+        "normal",
+        "-1",
+        "1.0",
+        "blank"
+      ],
+      "title": "Batch Sampler (4 lines)"
+    },
+    {
+      "id": 9,
+      "type": "SaveBatchFolder (ponytail)",
+      "pos": [
+        1290,
+        40
+      ],
+      "size": [
+        320,
+        340
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "images_0",
+          "name": "images_0",
+          "type": "IMAGE",
+          "shape": 7,
+          "link": 9
+        },
+        {
+          "localized_name": "images_1",
+          "name": "images_1",
+          "type": "IMAGE",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "images_2",
+          "name": "images_2",
+          "type": "IMAGE",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "images_3",
+          "name": "images_3",
+          "type": "IMAGE",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "images_4",
+          "name": "images_4",
+          "type": "IMAGE",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "images_5",
+          "name": "images_5",
+          "type": "IMAGE",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "images_6",
+          "name": "images_6",
+          "type": "IMAGE",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "images_7",
+          "name": "images_7",
+          "type": "IMAGE",
+          "shape": 7,
+          "link": null
+        },
+        {
+          "localized_name": "tags",
+          "name": "tags",
+          "type": "STRING",
+          "shape": 7,
+          "link": 10
+        },
+        {
+          "localized_name": "folder_prefix",
+          "name": "folder_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "folder_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "save_location",
+          "name": "save_location",
+          "type": "COMBO",
+          "widget": {
+            "name": "save_location"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "custom_dir",
+          "name": "custom_dir",
+          "type": "STRING",
+          "widget": {
+            "name": "custom_dir"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "format",
+          "name": "format",
+          "type": "COMBO",
+          "widget": {
+            "name": "format"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "jpg_quality",
+          "name": "jpg_quality",
+          "type": "INT",
+          "widget": {
+            "name": "jpg_quality"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveBatchFolder (ponytail)"
+      },
+      "widgets_values": [
+        "example",
+        "output",
+        "",
+        "png",
+        95
+      ],
+      "title": "Save Batch Folder (writes fish_tags)"
+    },
+    {
+      "id": 10,
+      "type": "Note",
+      "pos": [
+        860,
+        500
+      ],
+      "size": [
+        750,
+        340
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Note"
+      },
+      "widgets_values": [
+        "Example: Tag Chain -> Recipe Map -> Batch Sampler -> Save Batch Folder.\n\n1. Tag Chain turns the base prompt plus one add/remove step per line into a 4-line recipe (4 images).\n2. Recipe Map appends the same text to every line (each / pairwise / by_index).\n3. Batch Sampler samples one image per recipe line and returns the resolved prompt for each image on its 'prompts' output.\n4. Save Batch Folder stores the batch and writes those prompts into the PNG metadata (fish_tags) - connect 'prompts' to its 'tags' input.\n\nStyle Permute below is muted: unmute it (right click -> Mode) to expand style tags into every combination or permutation instead of using Tag Chain.\nSwap the checkpoint for any SDXL/SD1.5 model you have."
+      ],
+      "title": "How this example works"
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      3,
+      8,
+      "STRING"
+    ],
+    [
+      2,
+      3,
+      0,
+      4,
+      0,
+      "STRING"
+    ],
+    [
+      3,
+      6,
+      0,
+      7,
+      1,
+      "STRING"
+    ],
+    [
+      4,
+      1,
+      0,
+      8,
+      0,
+      "MODEL"
+    ],
+    [
+      5,
+      1,
+      1,
+      8,
+      1,
+      "CLIP"
+    ],
+    [
+      6,
+      1,
+      2,
+      8,
+      2,
+      "VAE"
+    ],
+    [
+      7,
+      7,
+      0,
+      8,
+      3,
+      "CONDITIONING"
+    ],
+    [
+      8,
+      4,
+      0,
+      8,
+      6,
+      "STRING"
+    ],
+    [
+      9,
+      8,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      10,
+      8,
+      2,
+      9,
+      8,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
