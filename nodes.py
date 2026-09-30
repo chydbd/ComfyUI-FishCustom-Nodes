@@ -1,3 +1,4 @@
+import itertools
 import json
 import os
 import random
@@ -532,6 +533,252 @@ class TagMutualExclusion:
         return (_join_units(units),)
 
 
+TAGCHAIN_RANDOM_INPUTS = 8
+
+
+class FishTagChain:
+    """Builds a multi-line recipe from incremental add/remove tag lines.
+
+    The first image uses `base` unchanged. Each non-empty line in `steps`
+    produces one more image:
+        added,tags | removed,tags
+    - `|` separates added tags (left) from removed tags (right).
+    - Missing `|` means the whole line is added tags.
+    - Removed tags are matched as substrings (same semantics as TagBlacklist).
+    - Added tags are prepended to the remaining text.
+
+    Optional inputs r0..r7 can be referenced in `base` and `steps` as
+    {r0}..{r7}; they are replaced when the recipe is built. This lets you
+    keep RandomTag nodes on the canvas (weighted / multi-pick / zero_allowed)
+    and inject their output into any step. Anything that is not an r0..r7
+    placeholder (e.g. {a|b|c}) is left untouched for FishBatchSampler to
+    resolve at sampling time.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        inputs = {
+            "required": {
+                "base": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "First image prompt (full text). Supports {r0}..{r7} placeholders."
+                }),
+                "steps": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "One line per following image: added,tags | removed,tags\n"
+                               "e.g. 2girls, yuri, nakasu kasumi | 1girl, solo\n"
+                               "     konoe kanata | nakasu kasumi\n"
+                               "Supports {r0}..{r7} placeholders in added and removed parts."
+                }),
+            },
+            "optional": {},
+        }
+        for i in range(TAGCHAIN_RANDOM_INPUTS):
+            inputs["optional"][f"r{i}"] = ("STRING", {"forceInput": True})
+        return inputs
+
+    RETURN_TYPES = ("STRING", "INT")
+    RETURN_NAMES = ("recipe", "count")
+    FUNCTION = "build_chain"
+    CATEGORY = "FishCustom/tag"
+    DESCRIPTION = "Turns add/remove tag steps into a multi-line recipe for FishBatchSampler. {r0}..{r7} placeholders inject external random tag inputs."
+
+    def _expand_placeholders(self, text, kwargs):
+        for i in range(TAGCHAIN_RANDOM_INPUTS):
+            text = text.replace(f"{{r{i}}}", (kwargs.get(f"r{i}") or "").strip())
+        return text
+
+    def build_chain(self, base, steps, **kwargs):
+        base = self._expand_placeholders((base or "").strip(), kwargs)
+        if not base:
+            raise ValueError("FishTagChain: base 不能为空")
+
+        lines = [base]
+        for raw in (steps or "").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            if "|" in line:
+                add_part, del_part = line.split("|", 1)
+            else:
+                add_part, del_part = line, ""
+
+            add_part = self._expand_placeholders(add_part, kwargs)
+            del_part = self._expand_placeholders(del_part, kwargs)
+
+            add_tags = [t.strip() for t in add_part.split(",") if t.strip()]
+            del_tags = [t.strip() for t in del_part.split(",") if t.strip()]
+
+            units = _split_units(lines[-1])
+            if del_tags:
+                units = [u for u in units if not _unit_matches_any(u, del_tags, "substring")]
+            units = add_tags + units
+
+            lines.append(_join_units(units))
+
+        return ("\n".join(lines), len(lines))
+
+
+STYLE_PERMUTE_LIMIT = 2000
+
+
+class FishStylePermute:
+    """Lists combinations or permutations of style tags as a multi-line recipe.
+
+    combinations: all non-empty combinations (choose 1, choose 2, ... all),
+                  preserving input order.
+    permutations: every full ordering of all tags.
+
+    The output connects directly to FishBatchSampler.recipe so every line
+    generates one image.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "styles": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "One style tag per line."
+                }),
+                "mode": (["combinations", "permutations"], {
+                    "default": "combinations",
+                    "tooltip": "combinations=all subsets (size 1..n); permutations=all full orderings"
+                }),
+                "joiner": ("STRING", {
+                    "default": ", ",
+                    "tooltip": "Separator between tags inside each output line."
+                }),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "INT")
+    RETURN_NAMES = ("recipe", "count")
+    FUNCTION = "permute"
+    CATEGORY = "FishCustom/tag"
+    DESCRIPTION = "Expands style tags into a multi-line recipe of all combinations or permutations."
+
+    def permute(self, styles, mode, joiner=", "):
+        items = [s.strip() for s in (styles or "").splitlines() if s.strip()]
+        if not items:
+            raise ValueError("FishStylePermute: styles 为空（或只有空行）")
+
+        if mode == "permutations":
+            lines = [joiner.join(p) for p in itertools.permutations(items)]
+        else:
+            lines = []
+            for r in range(1, len(items) + 1):
+                for combo in itertools.combinations(items, r):
+                    lines.append(joiner.join(combo))
+                    if len(lines) > STYLE_PERMUTE_LIMIT:
+                        raise ValueError(
+                            f"FishStylePermute: 组合数超过 {STYLE_PERMUTE_LIMIT} 行，请减少 styles 数量")
+
+        if len(lines) > STYLE_PERMUTE_LIMIT:
+            raise ValueError(
+                f"FishStylePermute: 组合数超过 {STYLE_PERMUTE_LIMIT} 行，请减少 styles 数量")
+
+        return ("\n".join(lines), len(lines))
+
+
+class FishRecipeMap:
+    """Applies extra text to each line of a multi-line recipe.
+
+    apply_mode:
+      each      -> the same extra text is added to every line.
+      pairwise  -> extra has one line per recipe line, applied 1:1 in order.
+      by_index  -> extra lines use "index:content" (1-based) to target
+                   specific recipe lines.
+    mode:
+      append  -> line + joiner + extra
+      prepend -> extra + joiner + line
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "recipe": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Multi-line recipe (one prompt per line)."
+                }),
+                "extra": ("STRING", {
+                    "multiline": True,
+                    "default": "",
+                    "tooltip": "Content to add. each=same text for all lines; pairwise=one line per recipe line; by_index=lines like '2:content'."
+                }),
+                "mode": (["append", "prepend"], {
+                    "default": "append",
+                    "tooltip": "append=add after each line; prepend=add before each line"
+                }),
+                "apply_mode": (["each", "pairwise", "by_index"], {
+                    "default": "each",
+                    "tooltip": "each=same extra for every line; pairwise=line-by-line match; by_index=target specific lines"
+                }),
+                "joiner": ("STRING", {
+                    "default": ", ",
+                    "tooltip": "Separator between the original line and the extra text."
+                }),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "INT")
+    RETURN_NAMES = ("recipe", "count")
+    FUNCTION = "map_lines"
+    CATEGORY = "FishCustom/tag"
+    DESCRIPTION = "Adds text to each / matched / specific lines of a multi-line recipe."
+
+    def _apply(self, line, extra, mode, joiner):
+        if not extra:
+            return line
+        return line + joiner + extra if mode == "append" else extra + joiner + line
+
+    def map_lines(self, recipe, extra, mode, apply_mode, joiner=", "):
+        lines = [ln.strip() for ln in (recipe or "").splitlines()
+                 if ln.strip() and not ln.strip().startswith("#")]
+        if not lines:
+            raise ValueError("FishRecipeMap: recipe 为空（或只有空行/注释）")
+
+        extra_lines = [ln.strip() for ln in (extra or "").splitlines()
+                       if ln.strip() and not ln.strip().startswith("#")]
+
+        if apply_mode == "each":
+            extra_text = extra_lines[0] if extra_lines else ""
+            out = [self._apply(ln, extra_text, mode, joiner) for ln in lines]
+
+        elif apply_mode == "pairwise":
+            if len(extra_lines) != len(lines):
+                raise ValueError(
+                    f"FishRecipeMap: pairwise 模式要求 extra 行数({len(extra_lines)})与 recipe 行数({len(lines)})一致")
+            out = [self._apply(lines[i], extra_lines[i], mode, joiner) for i in range(len(lines))]
+
+        else:  # by_index
+            by_idx = {}
+            for raw in extra_lines:
+                if ":" not in raw:
+                    raise ValueError(
+                        f"FishRecipeMap: by_index 模式要求每行格式为 '行号:内容'，收到: {raw}")
+                idx_s, content = raw.split(":", 1)
+                try:
+                    idx = int(idx_s.strip())
+                except ValueError:
+                    raise ValueError(
+                        f"FishRecipeMap: by_index 行号必须是整数，收到: {raw}")
+                if idx < 1 or idx > len(lines):
+                    raise ValueError(
+                        f"FishRecipeMap: by_index 行号 {idx} 超出 recipe 范围 1..{len(lines)}")
+                by_idx[idx] = content.strip()
+            out = [self._apply(lines[i], by_idx.get(i + 1, ""), mode, joiner)
+                   for i in range(len(lines))]
+
+        return ("\n".join(out), len(out))
+
+
 SAVE_BATCH_INPUTS = 8
 
 
@@ -543,6 +790,9 @@ class SaveBatchFolder:
     directory, so each batch of generated images gets its own folder.
     Files are named img_{port}_{seq}_.png / .jpg. Supports png (with full
     metadata) and jpg (quality-controlled, no metadata).
+
+    When exactly one image is connected, no subfolder is created: the image
+    is saved directly into the target directory as {prefix}_{timestamp}.{ext}.
     """
 
     def __init__(self):
@@ -557,7 +807,7 @@ class SaveBatchFolder:
             "required": {
                 "folder_prefix": ("STRING", {
                     "default": "batch",
-                    "tooltip": "Prefix for the new folder. A timestamp is appended: {prefix}_{YYYYMMDD_HHMMSS}"
+                    "tooltip": "Prefix for the new folder (or for the single image file when only one image is connected)."
                 }),
                 "save_location": (["output", "temp", "custom"], {
                     "default": "output",
@@ -584,13 +834,18 @@ class SaveBatchFolder:
         }
         for i in range(SAVE_BATCH_INPUTS):
             inputs["optional"][f"images_{i}"] = ("IMAGE",)
+        inputs["optional"]["tags"] = ("STRING", {
+            "multiline": True,
+            "forceInput": True,
+            "tooltip": "Optional resolved prompts, one line per image. PNG: written to the fish_tags metadata field. JPG: written to a same-name .txt sidecar."
+        })
         return inputs
 
     RETURN_TYPES = ()
     FUNCTION = "save_images"
     OUTPUT_NODE = True
     CATEGORY = "FishCustom/save"
-    DESCRIPTION = "Saves all connected images into one unique folder per execution."
+    DESCRIPTION = "Saves all connected images into one unique folder per execution; a single image is saved directly without creating a folder."
 
     def _make_folder(self, root_dir, base_subfolder, prefix):
         """Create a unique timestamped subfolder under root_dir/base_subfolder.
@@ -649,13 +904,36 @@ class SaveBatchFolder:
             return {"ui": {"images": []}}
 
         root_dir, self.type, base_subfolder = self._resolve_target(save_location, custom_dir)
-        subfolder = self._make_folder(root_dir, base_subfolder, folder_prefix)
-        full_folder = os.path.join(root_dir, subfolder)
         ext = "jpg" if format == "jpg" else "png"
+        total_images = sum(tensor.shape[0] for _, tensor in images)
+        single = total_images == 1
+
+        tags_text = (kwargs.get("tags") or "").strip()
+        tag_lines = [ln.strip() for ln in tags_text.splitlines()] if tags_text else []
+
+        if single:
+            subfolder = base_subfolder
+            full_folder = os.path.join(root_dir, base_subfolder) if base_subfolder else root_dir
+            os.makedirs(full_folder, exist_ok=True)
+            base = re.sub(r'[\\/:*?"<>|]', "_", folder_prefix.strip()) or "image"
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            file = f"{base}_{ts}.{ext}"
+            n = 1
+            while os.path.exists(os.path.join(full_folder, file)):
+                file = f"{base}_{ts}_{n}.{ext}"
+                n += 1
+        else:
+            subfolder = self._make_folder(root_dir, base_subfolder, folder_prefix)
+            full_folder = os.path.join(root_dir, subfolder)
+
         results = []
+        global_idx = 0
 
         for port, tensor in images:
             for batch_number, image in enumerate(tensor):
+                tag_line = tag_lines[global_idx] if global_idx < len(tag_lines) else ""
+                global_idx += 1
+
                 i = 255. * image.cpu().numpy()
                 img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
 
@@ -667,8 +945,11 @@ class SaveBatchFolder:
                     if extra_pnginfo is not None:
                         for x in extra_pnginfo:
                             metadata.add_text(x, json.dumps(extra_pnginfo[x]))
+                    if tag_line:
+                        metadata.add_text("fish_tags", tag_line)
 
-                file = f"img_{port}_{batch_number:05}_.{ext}"
+                if not single:
+                    file = f"img_{port}_{batch_number:05}_.{ext}"
                 if format == "jpg":
                     # JPEG has no alpha channel: composite RGBA onto white,
                     # convert any other non-RGB mode (L/P/CMYK) as well.
@@ -679,6 +960,10 @@ class SaveBatchFolder:
                     elif img.mode != "RGB":
                         img = img.convert("RGB")
                     img.save(os.path.join(full_folder, file), quality=jpg_quality)
+                    if tag_line:
+                        sidecar = os.path.join(full_folder, os.path.splitext(file)[0] + ".txt")
+                        with open(sidecar, "w", encoding="utf-8") as f:
+                            f.write(tag_line)
                 else:
                     img.save(os.path.join(full_folder, file), pnginfo=metadata, compress_level=self.compress_level)
 
@@ -763,11 +1048,20 @@ class FishBatchSampler:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "INT")
-    RETURN_NAMES = ("images", "count")
+    RETURN_TYPES = ("IMAGE", "INT", "STRING")
+    RETURN_NAMES = ("images", "count", "prompts")
     FUNCTION = "batch_sample"
     CATEGORY = "FishCustom/sample"
-    DESCRIPTION = "Runs one sampler per recipe line with per-image seed/denoise/latent source and returns all images as one batch."
+    DESCRIPTION = "Runs one sampler per recipe line with per-image seed/denoise/latent source and returns all images as one batch plus the resolved prompt for each image."
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        # Force re-execution when any seed is -1 (random), otherwise allow
+        # ComfyUI's cache to reuse results for fully fixed seeds.
+        seed = kwargs.get("seed") or ""
+        if "-1" in str(seed):
+            return random.random()
+        return str(seed)
 
     # ------------------------------------------------------------------ #
     # recipe
@@ -914,13 +1208,15 @@ class FishBatchSampler:
             return {"samples": torch.zeros([1, 4, height // 8, width // 8])}
 
         latents = {}
-        images = []
+        images_by_idx = {}
+        prompts_by_idx = {}
         named_cache = {}
 
         for i in order:
             seed_i = seeds[i] if seeds[i] >= 0 else random.randint(0, 0xffffffffffffffff)
             rng = random.Random(seed_i)
             prompt = self._resolve_random_items(prompts[i], rng, named_cache)
+            prompts_by_idx[i] = prompt
 
             positive = _CoreCLIPTextEncode().encode(clip, prompt)[0]
 
@@ -951,10 +1247,11 @@ class FishBatchSampler:
             latents[i] = sampled
 
             img = _CoreVAEDecode().decode(vae, sampled)[0]
-            images.append(img.cpu())
+            images_by_idx[i] = img.cpu()
 
-        batch = torch.cat(images, dim=0)
-        return (batch, n)
+        batch = torch.cat([images_by_idx[i] for i in range(n)], dim=0)
+        prompts_out = "\n".join(prompts_by_idx[i] for i in range(n))
+        return (batch, n, prompts_out)
 
 
 NODE_CLASS_MAPPINGS = {
@@ -965,6 +1262,9 @@ NODE_CLASS_MAPPINGS = {
     "Concat (ponytail)": Concat,
     "TagBlacklist (ponytail)": TagBlacklist,
     "TagMutualExclusion (ponytail)": TagMutualExclusion,
+    "FishTagChain (ponytail)": FishTagChain,
+    "FishStylePermute (ponytail)": FishStylePermute,
+    "FishRecipeMap (ponytail)": FishRecipeMap,
     "SaveBatchFolder (ponytail)": SaveBatchFolder,
     "FishBatchSampler (ponytail)": FishBatchSampler,
 }
@@ -977,6 +1277,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Concat (ponytail)": "Concat 🐟",
     "TagBlacklist (ponytail)": "Tag Blacklist 🐟",
     "TagMutualExclusion (ponytail)": "Tag Mutual Exclusion 🐟",
+    "FishTagChain (ponytail)": "Tag Chain 🐟",
+    "FishStylePermute (ponytail)": "Style Permute 🐟",
+    "FishRecipeMap (ponytail)": "Recipe Map 🐟",
     "SaveBatchFolder (ponytail)": "Save Batch Folder 🐟",
     "FishBatchSampler (ponytail)": "Batch Sampler 🐟",
 }

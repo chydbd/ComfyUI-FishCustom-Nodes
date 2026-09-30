@@ -1,0 +1,11 @@
+# Store text as LF in the repository regardless of the platform.
+* text=auto
+
+# Binary assets: never touch line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.psd binary
+*.safetensors binary
+*.zip binary

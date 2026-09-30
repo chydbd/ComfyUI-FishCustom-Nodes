@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -5,7 +6,8 @@ __pycache__/
 .venv/
 venv/
 
-# local demo / example workflows (not part of the published repo)
-example_workflow.json
+# local / personal workflows and generator helpers (not part of the published repo)
 workflows/
+example_workflow.json
 make_demo_workflows.py
+make_example_workflow.py
