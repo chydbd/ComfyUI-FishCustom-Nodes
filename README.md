@@ -27,6 +27,8 @@ ComfyUI 自定义节点：词条生成/过滤、配方（recipe）编排、逻�
 
 ## 安装
 
+需要 Python 3.9+（与 `pyproject.toml` 的 `requires-python` 保持一致）。
+
 **方式一 — git clone（推荐）：**
 
 ```bash
