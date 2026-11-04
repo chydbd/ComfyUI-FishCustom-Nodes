@@ -8,20 +8,22 @@ ComfyUI 自定义节点：词条生成/过滤、配方（recipe）编排、逻�
 
 ## 节点列表
 
-| 节点 | 分类 | 说明 |
-|---|---|---|
-| **Static Tag** | `FishCustom/tag` | 输出固定词条，原样透传。 |
-| **Random Tag** | `FishCustom/tag` | 加权随机词条，支持权重上限与三种模式（strict / relaxed / zero_allowed）。 |
-| **Tag Blacklist** | `FishCustom/tag` | 黑名单删除词条，支持子串/精确匹配，可命中 `(tag:1.2)` 权重写法。 |
-| **Tag Mutual Exclusion** | `FishCustom/tag` | 互斥词条过滤，每组最多保留一个（random / first / last）。 |
-| **Tag Chain** | `FishCustom/tag` | 用「加词条 / 删词条」步骤逐行推导 prompt：第 1 行用 `base`，之后每行 `新增 \| 删除` 得到下一行；可用 `{r0}`…`{r7}` 注入外部随机词条。 |
-| **Style Permute** | `FishCustom/tag` | 把风格词条展开为全部组合（combinations）或全排列（permutations），一行一张图，上限 2000 行。 |
-| **Recipe Map** | `FishCustom/tag` | 给多行 recipe 逐行追加/前置文本：`each` 每行加同一段、`pairwise` 逐行一一对应、`by_index` 用 `行号:内容` 精确指定。 |
-| **Text Analyzer** | `FishCustom/logic` | 关键词检测，输出选择器信号（INT）。 |
-| **Smart Switch** | `FishCustom/logic` | 按选择器路由 10 路输入（懒求值，只计算激活分支）。 |
-| **Concat** | `FishCustom/utils` | 合并最多 10 路文本输入，可自定义分隔符；`newline=True` 时用换行连接，适合拼多行 recipe。 |
-| **Batch Sampler** | `FishCustom/sample` | 一个节点替代 N 条并列采样链：多行 recipe 逐行采样，支持逐图 seed / denoise / latent 来源；输出合并后的 IMAGE batch，以及逐图解析后的 prompt（`prompts`）。 |
-| **Save Batch Folder** | `FishCustom/save` | 最多 8 路图片，每次执行存到独立时间戳文件夹；只接 1 张图时直接存成 `{prefix}_{时间戳}.{ext}`。支持 PNG/JPG 与可选输出目录，可选 `tags` 输入把 prompt 写进 PNG 元数据 / JPG 同名 `.txt`。 |
+| 节点 | 内部类名 | 分类 | 说明 |
+|---|---|---|---|
+| **Static Tag** | `FishCustom_StaticTag` | `FishCustom/tag` | 输出固定词条，原样透传。 |
+| **Random Tag** | `FishCustom_RandomTag` | `FishCustom/tag` | 加权随机词条，支持权重上限与三种模式（strict / relaxed / zero_allowed）。 |
+| **Tag Blacklist** | `FishCustom_TagBlacklist` | `FishCustom/tag` | 黑名单删除词条，支持子串/精确匹配，可命中 `(tag:1.2)` 权重写法。 |
+| **Tag Mutual Exclusion** | `FishCustom_TagMutualExclusion` | `FishCustom/tag` | 互斥词条过滤，每组最多保留一个（random / first / last）。 |
+| **Tag Chain** | `FishCustom_TagChain` | `FishCustom/tag` | 用「加词条 / 删词条」步骤逐行推导 prompt：第 1 行用 `base`，之后每行 `新增 \| 删除` 得到下一行；可用 `{r0}`…`{r7}` 注入外部随机词条。 |
+| **Style Permute** | `FishCustom_StylePermute` | `FishCustom/tag` | 把风格词条展开为全部组合（combinations）或全排列（permutations），一行一张图，上限 2000 行。 |
+| **Recipe Map** | `FishCustom_RecipeMap` | `FishCustom/tag` | 给多行 recipe 逐行追加/前置文本：`each` 每行加同一段、`pairwise` 逐行一一对应、`by_index` 用 `行号:内容` 精确指定。 |
+| **Text Analyzer** | `FishCustom_TextAnalyzer` | `FishCustom/logic` | 关键词检测，输出选择器信号（INT）。 |
+| **Smart Switch** | `FishCustom_SmartSwitch` | `FishCustom/logic` | 按选择器路由 10 路输入（懒求值，只计算激活分支）。 |
+| **Concat** | `FishCustom_Concat` | `FishCustom/utils` | 合并最多 10 路文本输入，可自定义分隔符；`newline=True` 时用换行连接，适合拼多行 recipe。 |
+| **Batch Sampler** | `FishCustom_BatchSampler` | `FishCustom/sample` | 一个节点替代 N 条并列采样链：多行 recipe 逐行采样，支持逐图 seed / denoise / latent 来源；输出合并后的 IMAGE batch，以及逐图解析后的 prompt（`prompts`）。 |
+| **Save Batch Folder** | `FishCustom_SaveBatchFolder` | `FishCustom/save` | 最多 8 路图片，每次执行存到独立时间戳文件夹；只接 1 张图时直接存成 `{prefix}_{时间戳}.{ext}`。支持 PNG/JPG 与可选输出目录，可选 `tags` 输入把 prompt 写进 PNG 元数据 / JPG 同名 `.txt`。 |
+
+> 旧版 `(ponytail)` 节点名仍保留为兼容别名，已有工作流与 `examples/` 可直接加载。
 
 ---
 

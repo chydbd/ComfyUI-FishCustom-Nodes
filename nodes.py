@@ -1254,7 +1254,21 @@ class FishBatchSampler:
         return (batch, n, prompts_out)
 
 
+# Primary node identifiers use the repository-consistent ``FishCustom_*`` form.
 NODE_CLASS_MAPPINGS = {
+    "FishCustom_StaticTag": StaticTag,
+    "FishCustom_RandomTag": RandomTag,
+    "FishCustom_TextAnalyzer": TextAnalyzer,
+    "FishCustom_SmartSwitch": SmartSwitch,
+    "FishCustom_Concat": Concat,
+    "FishCustom_TagBlacklist": TagBlacklist,
+    "FishCustom_TagMutualExclusion": TagMutualExclusion,
+    "FishCustom_TagChain": FishTagChain,
+    "FishCustom_StylePermute": FishStylePermute,
+    "FishCustom_RecipeMap": FishRecipeMap,
+    "FishCustom_SaveBatchFolder": SaveBatchFolder,
+    "FishCustom_BatchSampler": FishBatchSampler,
+    # Legacy aliases: keep old serialized workflows (including examples/) loading.
     "StaticTag (ponytail)": StaticTag,
     "RandomTag (ponytail)": RandomTag,
     "TextAnalyzer (ponytail)": TextAnalyzer,
@@ -1270,6 +1284,19 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "FishCustom_StaticTag": "Static Tag 🐟",
+    "FishCustom_RandomTag": "Random Tag 🐟",
+    "FishCustom_TextAnalyzer": "Text Analyzer 🐟",
+    "FishCustom_SmartSwitch": "Smart Switch 🐟",
+    "FishCustom_Concat": "Concat 🐟",
+    "FishCustom_TagBlacklist": "Tag Blacklist 🐟",
+    "FishCustom_TagMutualExclusion": "Tag Mutual Exclusion 🐟",
+    "FishCustom_TagChain": "Tag Chain 🐟",
+    "FishCustom_StylePermute": "Style Permute 🐟",
+    "FishCustom_RecipeMap": "Recipe Map 🐟",
+    "FishCustom_SaveBatchFolder": "Save Batch Folder 🐟",
+    "FishCustom_BatchSampler": "Batch Sampler 🐟",
+    # Keep the legacy names displaying exactly as before.
     "StaticTag (ponytail)": "Static Tag 🐟",
     "RandomTag (ponytail)": "Random Tag 🐟",
     "TextAnalyzer (ponytail)": "Text Analyzer 🐟",

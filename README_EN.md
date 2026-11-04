@@ -8,20 +8,22 @@ Custom nodes for ComfyUI: tag generation/filtering, recipe building, logic routi
 
 ## Nodes
 
-| Node | Category | Description |
-|---|---|---|
-| **Static Tag** | `FishCustom/tag` | Outputs fixed text unchanged. |
-| **Random Tag** | `FishCustom/tag` | Weighted random tag picker with weight cap and 3 modes (strict / relaxed / zero_allowed). |
-| **Tag Blacklist** | `FishCustom/tag` | Removes blacklisted tags. substring / exact matching, handles `(tag:1.2)` weight syntax. |
-| **Tag Mutual Exclusion** | `FishCustom/tag` | Keeps at most one tag per exclusive group (random / first / last). |
-| **Tag Chain** | `FishCustom/tag` | Derives one prompt per step from add/remove lines: line 1 is `base`, each following line is `added \| removed`. `{r0}`…`{r7}` inject external tag inputs. |
-| **Style Permute** | `FishCustom/tag` | Expands style tags into every combination or permutation, one image per line (2000-line cap). |
-| **Recipe Map** | `FishCustom/tag` | Appends/prepends text to recipe lines: `each` (same text everywhere), `pairwise` (1:1 with the recipe), `by_index` (`line:content`). |
-| **Text Analyzer** | `FishCustom/logic` | Detects keywords and outputs an INT selector signal. |
-| **Smart Switch** | `FishCustom/logic` | Routes one of 10 inputs to output based on selector (lazy evaluation). |
-| **Concat** | `FishCustom/utils` | Joins up to 10 STRING inputs with a configurable separator; `newline=True` joins with newlines, handy for building multi-line recipes. |
-| **Batch Sampler** | `FishCustom/sample` | Replaces N parallel sampling chains: samples one image per recipe line with per-image seed / denoise / latent source; returns one IMAGE batch plus the resolved prompt per image (`prompts`). |
-| **Save Batch Folder** | `FishCustom/save` | Saves up to 8 image inputs into one unique timestamped folder per execution; with a single image it saves `{prefix}_{timestamp}.{ext}` directly. PNG / JPG, output / temp / custom dir, optional `tags` input stored as PNG metadata or a `.txt` sidecar. |
+| Node | Internal name | Category | Description |
+|---|---|---|---|
+| **Static Tag** | `FishCustom_StaticTag` | `FishCustom/tag` | Outputs fixed text unchanged. |
+| **Random Tag** | `FishCustom_RandomTag` | `FishCustom/tag` | Weighted random tag picker with weight cap and 3 modes (strict / relaxed / zero_allowed). |
+| **Tag Blacklist** | `FishCustom_TagBlacklist` | `FishCustom/tag` | Removes blacklisted tags. substring / exact matching, handles `(tag:1.2)` weight syntax. |
+| **Tag Mutual Exclusion** | `FishCustom_TagMutualExclusion` | `FishCustom/tag` | Keeps at most one tag per exclusive group (random / first / last). |
+| **Tag Chain** | `FishCustom_TagChain` | `FishCustom/tag` | Derives one prompt per step from add/remove lines: line 1 is `base`, each following line is `added \| removed`. `{r0}`…`{r7}` inject external tag inputs. |
+| **Style Permute** | `FishCustom_StylePermute` | `FishCustom/tag` | Expands style tags into every combination or permutation, one image per line (2000-line cap). |
+| **Recipe Map** | `FishCustom_RecipeMap` | `FishCustom/tag` | Appends/prepends text to recipe lines: `each` (same text everywhere), `pairwise` (1:1 with the recipe), `by_index` (`line:content`). |
+| **Text Analyzer** | `FishCustom_TextAnalyzer` | `FishCustom/logic` | Detects keywords and outputs an INT selector signal. |
+| **Smart Switch** | `FishCustom_SmartSwitch` | `FishCustom/logic` | Routes one of 10 inputs to output based on selector (lazy evaluation). |
+| **Concat** | `FishCustom_Concat` | `FishCustom/utils` | Joins up to 10 STRING inputs with a configurable separator; `newline=True` joins with newlines, handy for building multi-line recipes. |
+| **Batch Sampler** | `FishCustom_BatchSampler` | `FishCustom/sample` | Replaces N parallel sampling chains: samples one image per recipe line with per-image seed / denoise / latent source; returns one IMAGE batch plus the resolved prompt per image (`prompts`). |
+| **Save Batch Folder** | `FishCustom_SaveBatchFolder` | `FishCustom/save` | Saves up to 8 image inputs into one unique timestamped folder per execution; with a single image it saves `{prefix}_{timestamp}.{ext}` directly. PNG / JPG, output / temp / custom dir, optional `tags` input stored as PNG metadata or a `.txt` sidecar. |
+
+> The legacy `(ponytail)` node names are kept as compatibility aliases, so existing workflows and `examples/` keep loading unchanged.
 
 ---
 
